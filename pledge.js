@@ -7,28 +7,32 @@ var $Promise = function(){
   this.state = "pending";
   this.value = null;
   this.handlerGroups = [];
+};
 
-  this.catch = function(errorFn){
-	this.then(null, errorFn);
-  }
+$Promise.prototype.catch = function(errorFn){
+	return this.then(null, errorFn);
+};
 
-  this.then = function(successCb, errorCb){
+function Handler(successCb, errorCb){
+	this.successCb = null;
+	this.errorCb = null;
+	this.forwarder = new Deferral();
+}
+
+$Promise.prototype.then = function(successCb, errorCb){
     var idx = this.handlerGroups.length;
 
-    var handler = {
-      successCb: null,
-      errorCb: null
-    };
+    this.handler = new Handler();
 
     if(typeof successCb === 'function'){
-      handler.successCb = successCb;
+      this.handler.successCb = successCb;
     };
 
     if(typeof errorCb === 'function'){
-      handler.errorCb = errorCb;
+      this.handler.errorCb = errorCb;
     };
 
-    this.handlerGroups[idx] = handler;
+    this.handlerGroups[idx] = this.handler;
 
     if(this.state === "resolved" && this.handlerGroups[idx].successCb !== null){
       this.handlerGroups[idx].successCb(this.value)
@@ -36,8 +40,8 @@ var $Promise = function(){
     if (this.state === "rejected" && this.handlerGroups[idx].errorCb !== null){
    	  this.handlerGroups[idx].errorCb(this.value)
    	};
+   	return this.handler.forwarder.$promise;
   };
-};
 
 var Deferral = function(){
   this.$promise = new $Promise();
@@ -50,7 +54,17 @@ var Deferral = function(){
     };
     if(promise.state === "resolved" && promise.handlerGroups.length > 0){
       promise.handlerGroups.forEach(function(handler){
-        handler.successCb(promise.value);
+      	if (handler.successCb === null) {
+      		promise.handler.forwarder.resolve(promise.value);
+      	}
+      	else {
+      		try { 
+      			promise.handler.forwarder.resolve(handler.successCb(promise.value));
+      		}
+      		catch(error) {
+      			promise.handler.forwarder.reject(error);
+      		}
+    	};
       });
     };
   };
@@ -63,7 +77,17 @@ var Deferral = function(){
     };
     if (promise.state === "rejected"){
     	promise.handlerGroups.forEach(function(handler){
-    		handler.errorCb(promise.value);
+    		if (handler.errorCb === null) {
+      			promise.handler.forwarder.reject(promise.value);
+      		}
+      		else {
+      			try {
+        			promise.handler.forwarder.resolve(handler.errorCb(promise.value));
+        		}
+        		catch(error) {
+        			promise.handler.forwarder.reject(error);
+        		}
+    		};
     	});
     };
   };
