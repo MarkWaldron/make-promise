@@ -5,8 +5,9 @@ Promises Workshop: build the pledge.js deferral-style promise library
 
 var $Promise = function(){
   this.state = "pending";
-  this.value = null;
+  this.value = undefined;
   this.handlerGroups = [];
+  this.updateCbs = [];
 };
 
 $Promise.prototype.catch = function(errorFn){
@@ -19,7 +20,7 @@ function Handler(successCb, errorCb){
   this.forwarder = new Deferral();
 }
 
-$Promise.prototype.then = function(successCb, errorCb){
+$Promise.prototype.then = function(successCb, errorCb, updateCb){
     var idx = this.handlerGroups.length;
 
     this.handler = new Handler();
@@ -31,13 +32,15 @@ $Promise.prototype.then = function(successCb, errorCb){
     if(typeof errorCb === 'function'){
       this.handler.errorCb = errorCb;
     };
-
+    if(typeof updateCb === 'function'){
+      this.updateCbs.push(updateCb);
+    }
     this.handlerGroups[idx] = this.handler;
 
     if(this.state === "resolved" && this.handlerGroups[idx].successCb !== null){
       this.handlerGroups[idx].successCb(this.value)
     };
-    if (this.state === "rejected" && this.handlerGroups[idx].errorCb !== null){
+    if(this.state === "rejected" && this.handlerGroups[idx].errorCb !== null){
        this.handlerGroups[idx].errorCb(this.value)
      };
      return this.handler.forwarder.$promise;
@@ -48,7 +51,7 @@ var Deferral = function(){
   var promise = this.$promise;
 
   this.resolve = function(data){
-    if (promise.state === "pending"){
+    if(promise.state === "pending"){
       if(data instanceof $Promise) {
         data.then(function(x){
           promise.value = x;
@@ -61,7 +64,7 @@ var Deferral = function(){
     };
     if(promise.state === "resolved" && promise.handlerGroups.length > 0){
       promise.handlerGroups.forEach(function(handler){
-        if (handler.successCb === null) {
+        if(handler.successCb === null) {
           promise.handler.forwarder.resolve(promise.value);
         }
         else {
@@ -71,7 +74,7 @@ var Deferral = function(){
           catch(error) {
             promise.handler.forwarder.reject(error);
           }
-      };
+        };
       });
     };
   };
@@ -95,6 +98,14 @@ var Deferral = function(){
               promise.handler.forwarder.reject(error);
             }
         };
+      });
+    };
+  };
+
+  this.notify = function(value){
+    if(this.$promise.state !== 'resolved' && this.$promise.state !== 'rejected'){
+      this.$promise.updateCbs.forEach(function (cb){
+        cb(value);
       });
     };
   };
