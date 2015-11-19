@@ -8,6 +8,10 @@ var $Promise = function(){
   this.value = null;
   this.handlerGroups = [];
 
+  this.catch = function(errorFn){
+	this.then(null, errorFn);
+  }
+
   this.then = function(successCb, errorCb){
     var idx = this.handlerGroups.length;
 
@@ -26,17 +30,20 @@ var $Promise = function(){
 
     this.handlerGroups[idx] = handler;
 
-    if(this.state === "resolved"){
+    if(this.state === "resolved" && this.handlerGroups[idx].successCb !== null){
       this.handlerGroups[idx].successCb(this.value)
     };
+    if (this.state === "rejected" && this.handlerGroups[idx].errorCb !== null){
+   	  this.handlerGroups[idx].errorCb(this.value)
+   	};
   };
 };
 
 var Deferral = function(){
   this.$promise = new $Promise();
+  var promise = this.$promise;
 
   this.resolve = function(data){
-    var promise = this.$promise;
     if (promise.state === "pending"){
       promise.value = data;
       promise.state = "resolved";
@@ -44,14 +51,20 @@ var Deferral = function(){
     if(promise.state === "resolved" && promise.handlerGroups.length > 0){
       promise.handlerGroups.forEach(function(handler){
         handler.successCb(promise.value);
-      })
-    }
+      });
+    };
   };
 
   this.reject = function(data){
     if (this.$promise.state == "pending"){
       this.$promise.value = data;
       this.$promise.state = "rejected";
+      // this.$promise.handlerGroups[this.handlerGroups.length].errorCb(data);
+    };
+    if (promise.state === "rejected"){
+    	promise.handlerGroups.forEach(function(handler){
+    		handler.errorCb(promise.value);
+    	});
     };
   };
 
